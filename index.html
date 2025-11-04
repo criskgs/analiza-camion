@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Analizor Rapoarte GPS Camioane</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="icon" href="data:," />
+</head>
+<body>
+  <header class="container">
+    <h1>Analizor Rapoarte GPS Camioane</h1>
+    <p class="subtitle">Încarcă Excel/CSV sau PDF &rarr; analizează &rarr; exportă PDF</p>
+  </header>
+
+  <main class="container card">
+    <section class="uploader">
+      <label class="file-label">
+        <input id="fileInput" type="file" multiple accept=".xlsx,.xls,.csv,application/pdf" />
+        <span>Încarcă fișiere</span>
+      </label>
+      <div class="controls">
+        <label>Prag km &lt; <input id="minKm" type="number" value="500" min="0" /></label>
+        <label>Idle suspect % &gt; <input id="idlePct" type="number" value="30" min="0" max="100" /></label>
+        <label>Folosește: 
+          <select id="kmSource">
+            <option value="gps">Distanța GPS</option>
+            <option value="can">Kilometraj CAN</option>
+            <option value="auto" selected>Auto (GPS dacă &gt; 0, altfel CAN)</option>
+          </select>
+        </label>
+        <button id="analyzeBtn" class="primary">Analizează</button>
+        <button id="exportPdfBtn">Export PDF</button>
+        <button id="clearBtn" class="ghost">Golește</button>
+      </div>
+      <p class="hint">Ai nevoie de un șablon? <a href="./sample.csv" download>Descarcă sample.csv</a></p>
+    </section>
+
+    <section>
+      <div id="status" class="status">Niciun fișier încărcat.</div>
+      <div id="tableWrap" class="table-wrap"></div>
+    </section>
+  </main>
+
+  <footer class="container muted small">
+    <p>© 2025. Se poate găzdui pe Netlify fără backend. Cod licențiat MIT.</p>
+  </footer>
+
+  <!-- Libs din CDN (fără build) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.20.2/xlsx.full.min.js" integrity="sha512-0fO7YkwthI0tJk+Z6yn7tQb8J6SgV6h2q0QPBWX2Nuf0eK8LhEwFCWm1Yk5t4+Qn7Xb8a8i9H2mOcgQ0Cw9oVQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-YkN3wF1QxH+MPxqk3rBsr84QjI5l0S5p4cGf2g1VbK3L0Z8QzJ8JgP+h2Q1z+F2qgS2z+z8gZc8g1o2I1xg2Vg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js" integrity="sha512-u3kD0m0oQ8zqb3HF3mztM1L9l8c4FMmY6Cj9o0V9Y0wqX2J8tduR2iP5bK8aR5o1vG0Nf2Pf0Jm1Hh8dK2tJXQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js" integrity="sha512-9x5iL8k0qU8bP0pEoEdWm5WgR5mOuYV5Qq0P3Q2QGZ1z2m5eJYtS4wVq6r6Gk4S+eR7JqQ+y0W4rD1x8VZ9zWQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script src="./app.js"></script>
+</body>
+</html>
