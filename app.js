@@ -1,4 +1,4 @@
-// App V2: fixed mapping for the provided 'SUMMARY' Excel
+// App V2.1: improved period extraction
 const fileInput = document.getElementById("fileInput");
 const statusBox = document.getElementById("status");
 const periodBox = document.getElementById("periodBox");
@@ -9,8 +9,8 @@ const minKmEl = document.getElementById("minKm");
 const kmSourceEl = document.getElementById("kmSource");
 const tableWrap = document.getElementById("tableWrap");
 
-let RAW_SHEETS = []; // store whole sheet tables
-let PERIOD = null;   // {start: Date, end: Date, hours: Number}
+let RAW_SHEETS = [];
+let PERIOD = null;
 
 fileInput.addEventListener("change", async (e) => {
   RAW_SHEETS = [];
@@ -38,7 +38,7 @@ fileInput.addEventListener("change", async (e) => {
     const allowed = (PERIOD.hours / 24) * 3;
     periodBox.textContent = `Perioadă: ${PERIOD.start.toLocaleString()}  –  ${PERIOD.end.toLocaleString()}  •  Durată: ${hrs} h  •  Idle normal admis: ${(allowed).toFixed(2)} h (3h/24h)`;
   } else {
-    periodBox.textContent = "Nu am putut extrage perioada (\"Data / Durata efectivă\").";
+    periodBox.textContent = "Nu am putut extrage perioada (caut două date/ore separate de '-').";
   }
 });
 
@@ -63,16 +63,17 @@ exportPdfBtn.addEventListener("click", () => {
   exportPdf();
 });
 
-// --- Parsing helpers for the fixed sheet ---
+// --- Robust period extraction ---
 function extractPeriod(grid) {
-  // Expect row ~2, col ~2: "Data / Durata efectivă: dd.mm.yyyy hh:mm:ss - dd.mm.yyyy hh:mm:ss"
-  const re = /Data\s*\/\s*Durata\s*efectiv[ăa]\s*:\s*(\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2})\s*-\s*(\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2})/i;
-  for (let r = 0; r < Math.min(10, grid.length); r++) {
-    for (let c = 0; c < Math.min(6, grid[r].length); c++) {
+  const dt = /\b(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2}:\d{2})\b/;
+  // 1) scan cells for a single-cell match containing two datetimes with '-'
+  for (let r = 0; r < Math.min(20, grid.length); r++) {
+    for (let c = 0; c < Math.min(20, grid[r].length); c++) {
       const cell = String(grid[r][c] || "");
-      const m = cell.match(re);
-      if (m) {
-        const [_, s1, s2] = m;
+      const parts = cell.split("-");
+      if (parts.length >= 2 && dt.test(parts[0]) && dt.test(parts[1])) {
+        const s1 = parts[0].match(dt)[0];
+        const s2 = parts[1].match(dt)[0];
         const [d1, t1] = s1.split(" "); const [d2, t2] = s2.split(" ");
         const toDate = (d, t) => {
           const [dd, mm, yyyy] = d.split(".").map(Number);
@@ -80,35 +81,49 @@ function extractPeriod(grid) {
           return new Date(yyyy, mm - 1, dd, hh, mi, ss);
         };
         const start = toDate(d1, t1), end = toDate(d2, t2);
-        const hours = (end - start) / 3_600_000;
-        return { start, end, hours };
+        return { start, end, hours: (end - start) / 3_600_000 };
       }
+    }
+  }
+  // 2) if label and value are split across cells in the same row, merge row text and retry
+  for (let r = 0; r < Math.min(20, grid.length); r++) {
+    const rowText = (grid[r] || []).join(" ");
+    const parts = rowText.split("-");
+    if (parts.length >= 2 && dt.test(parts[0]) && dt.test(parts[1])) {
+      const s1 = parts[0].match(dt)[0];
+      const s2 = parts[1].match(dt)[0];
+      const [d1, t1] = s1.split(" "); const [d2, t2] = s2.split(" ");
+      const toDate = (d, t) => {
+        const [dd, mm, yyyy] = d.split(".").map(Number);
+        const [hh, mi, ss] = t.split(":").map(Number);
+        return new Date(yyyy, mm - 1, dd, hh, mi, ss);
+      };
+      const start = toDate(d1, t1), end = toDate(d2, t2);
+      return { start, end, hours: (end - start) / 3_600_000 };
     }
   }
   return null;
 }
 
+// --- Table extraction (same as v2, but a bit more tolerant) ---
 function extractTable(grid) {
-  // Find header row where 'Vehicul' appears
   let headerRow = -1;
   for (let i = 0; i < Math.min(grid.length, 200); i++) {
     if (grid[i].some(v => String(v).trim().toLowerCase() === "vehicul")) { headerRow = i; break; }
   }
   if (headerRow === -1) return [];
-  // Identify column indices based on the exact labels present in provided sheet
-  const row = grid[headerRow];
+  const row = grid[headerRow].map(x => String(x).trim().toLowerCase());
+  const getIdx = (needle) => row.findIndex(v => v.includes(needle));
   const idx = {
-    vehicul: row.findIndex(v => String(v).trim().toLowerCase() === "vehicul"),
-    timpMiscare: row.findIndex(v => String(v).toLowerCase().includes("timp în mi")),
-    distGps: row.findIndex(v => String(v).toLowerCase().includes("distanta gps")),
-    kmCan: row.findIndex(v => String(v).toLowerCase().includes("kilometraj oprire can")),
-    timpStationare: row.findIndex(v => String(v).toLowerCase().includes("timp stationare")),
-    stationari: row.findIndex(v => String(v).toLowerCase().includes("staționări")),
-    vMax: row.findIndex(v => String(v).toLowerCase().includes("viteză maximă")),
-    vMedie: row.findIndex(v => String(v).toLowerCase().includes("viteza medie")),
-    consum: row.findIndex(v => String(v).toLowerCase().includes("consum total normat")),
-    timpIdle: row.findIndex(v => String(v).toLowerCase().includes("timp func") && String(v).toLowerCase().includes("staționar")),
-    funcMotor: row.findIndex(v => String(v).toLowerCase().includes("functionare motor")),
+    vehicul: row.indexOf("vehicul"),
+    timpMiscare: getIdx("timp în mi") !== -1 ? getIdx("timp în mi") : getIdx("timp in mi"),
+    distGps: getIdx("distanta gps"),
+    kmCan: getIdx("kilometraj oprire can"),
+    timpStationare: getIdx("timp stationare"),
+    stationari: getIdx("staționări") !== -1 ? getIdx("staționări") : getIdx("stationari"),
+    vMedie: getIdx("viteza medie"),
+    timpIdle: (function(){ const i1=getIdx("timp func"); const i2=getIdx("staționar"); const i3=getIdx("stationar"); return i1>-1 && (i2>-1 || i3>-1)? (i1>i2?i2:i1): getIdx("timp func"); })(),
+    funcMotor: getIdx("functionare motor") !== -1 ? getIdx("functionare motor") : getIdx("funcționare motor"),
   };
   const out = [];
   for (let r = headerRow + 1; r < grid.length; r++) {
@@ -130,7 +145,7 @@ function extractTable(grid) {
   return out;
 }
 
-// --- Transform + analysis ---
+// --- Transform + analysis (same as v2) ---
 const toNumberRO = (s) => {
   if (s == null) return null;
   if (typeof s === "number") return s;
@@ -142,7 +157,6 @@ const toNumberRO = (s) => {
 const timeToHours = (val) => {
   if (!val) return 0;
   const s = String(val);
-  // supports "2z 08h 55m 33s" or "06h 48m 19s" etc
   let d=0,h=0,m=0,sec=0;
   const D = s.match(/(\d+)\s*z/i); if (D) d = +D[1];
   const H = s.match(/(\d+)\s*h/i); if (H) h = +H[1];
@@ -152,7 +166,6 @@ const timeToHours = (val) => {
 };
 
 function transformAndAggregate(rows, { kmSource = "auto" } = {}) {
-  // dedupe/aggregate by vehicle (sum times and kms)
   const map = new Map();
   for (const r of rows) {
     const kmGps = toNumberRO(r.distGps);
@@ -178,7 +191,7 @@ function analyze(dataset, { minKm = 500, periodHours = null } = {}) {
   const avgKm = dataset.reduce((s,r)=>s+r.km,0) / Math.max(1, dataset.length);
   const lowEdge = Math.min(minKm, avgKm * 0.6);
   let allowedIdleH = null;
-  if (periodHours) allowedIdleH = (periodHours / 24) * 3; // rule: 3h per 24h
+  if (periodHours) allowedIdleH = (periodHours / 24) * 3;
   const flagsLowKm = dataset.filter(r => r.km < lowEdge).map(r => ({ vehicle: r.vehicle, km: r.km }));
   const flagsIdleOver = allowedIdleH == null ? [] :
     dataset.filter(r => r.tIdleH > allowedIdleH).map(r => ({ vehicle: r.vehicle, idleH: r.tIdleH, overBy: r.tIdleH - allowedIdleH }));
@@ -215,7 +228,7 @@ function exportPdf() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   doc.setFontSize(14);
-  doc.text("Analiză rapoarte GPS camioane – V2", 40, 40);
+  doc.text("Analiză rapoarte GPS camioane – V2.1", 40, 40);
   doc.setFontSize(10);
   const p = periodBox.textContent || "";
   doc.text(p, 40, 58, { maxWidth: 515 });
@@ -231,7 +244,6 @@ function exportPdf() {
     headStyles: { fillColor: [79,70,229] },
     columnStyles: { 1: { halign: "right" } }
   });
-  // Alerts
   let y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : 80;
   doc.setFontSize(12); doc.text("Alerte:", 40, y); y += 14; doc.setFontSize(10);
   const flagged = Array.from(document.querySelectorAll("tbody tr")).filter(tr => tr.querySelector(".badge.danger,.badge.warn"));
@@ -246,5 +258,5 @@ function exportPdf() {
       doc.text(`- ${veh}: KM=${km}, Idle=${idle}, ${note}`, 48, y); y += 12;
     });
   }
-  doc.save(`raport_camioane_v2_${Date.now()}.pdf`);
+  doc.save(`raport_camioane_v2_1_${Date.now()}.pdf`);
 }
