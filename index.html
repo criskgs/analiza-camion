@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Analizor Rapoarte GPS Camioane – V2</title>
+  <title>Analizor Rapoarte GPS Camioane – V3</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="container">
-    <h1>Analizor Rapoarte GPS Camioane – V2</h1>
-    <p class="subtitle">Optimizat pentru formatul Excel <strong>SUMMARY</strong> (coloane fixe)</p>
+    <h1>Analizor Rapoarte GPS Camioane – V3</h1>
+    <p class="subtitle">Versiune simplificată: selectezi perioada (zile) manual</p>
   </header>
 
   <main class="container card">
@@ -19,6 +19,16 @@
         <span>Încarcă Excel/CSV</span>
       </label>
       <div class="controls">
+        <label>Perioadă (zile)
+          <select id="periodDays">
+            <option value="1">1</option>
+            <option value="3">3</option>
+            <option value="7" selected>7</option>
+            <option value="14">14</option>
+            <option value="30">30</option>
+            <option value="60">60</option>
+          </select>
+        </label>
         <label>Prag KM minim <input id="minKm" type="number" value="500" min="0" /></label>
         <label>Sursă KM 
           <select id="kmSource">
@@ -34,14 +44,13 @@
     </section>
 
     <section>
-      <div id="periodBox" class="status"></div>
       <div id="status" class="status">Niciun fișier încărcat.</div>
       <div id="tableWrap" class="table-wrap"></div>
     </section>
   </main>
 
   <footer class="container muted small">
-    <p>© 2025 • Build-free • Licență MIT</p>
+    <p>© 2025 • Versiune V3 • Fără backend • MIT</p>
   </footer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.20.2/xlsx.full.min.js" crossorigin="anonymous"></script>
