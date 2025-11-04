@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Analizor Rapoarte GPS Camioane – V3</title>
+  <title>Analizor Rapoarte GPS Camioane – V3.2</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="container">
-    <h1>Analizor Rapoarte GPS Camioane – V3</h1>
-    <p class="subtitle">Versiune simplificată: selectezi perioada (zile) manual</p>
+    <h1>Analizor Rapoarte GPS Camioane – V3.2</h1>
+    <p class="subtitle">Perioadă din dropdown • Detectare antete tolerantă • Raport PDF</p>
   </header>
 
   <main class="container card">
@@ -50,12 +50,19 @@
   </main>
 
   <footer class="container muted small">
-    <p>© 2025 • Versiune V3 • Fără backend • MIT</p>
+    <p>© 2025 • V3.2 • MIT • Static (fără build)</p>
   </footer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.20.2/xlsx.full.min.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js" crossorigin="anonymous"></script>
+  <script>
+    // surface JS errors to the UI so it's obvious if something broke
+    window.addEventListener('error', function(e){
+      var box = document.getElementById('status');
+      if (box) box.textContent = 'Eroare JavaScript: ' + (e.message || e.error);
+    });
+  </script>
   <script src="./app.js"></script>
 </body>
 </html>
