@@ -1,4 +1,4 @@
-// App V3.2 – fixes syntax + robust header detection + error surfacing
+// App V3.3 – explicit mapping for the SAMPLE + tolerant fallback
 const fileInput = document.getElementById("fileInput");
 const statusBox = document.getElementById("status");
 const analyzeBtn = document.getElementById("analyzeBtn");
@@ -21,7 +21,7 @@ fileInput.addEventListener("change", async (e) => {
       const sheetName = wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
       const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
-      const table = extractTable(grid);
+      const table = extractTableExplicit(grid) ?? extractTableTolerant(grid);
       RAW_SHEETS.push(...table);
       statusBox.textContent = `Fișier: ${f.name} • Camioane detectate: ${table.length}`;
     } catch (err) {
@@ -30,7 +30,7 @@ fileInput.addEventListener("change", async (e) => {
     }
   }
   if (!files.length) statusBox.textContent = "Niciun fișier încărcat.";
-  if (!RAW_SHEETS.length && files.length) statusBox.textContent += "\nNu am găsit antetele așteptate. Încearcă CSV sau verifică prima foaie.";
+  if (!RAW_SHEETS.length && files.length) statusBox.textContent += "\nNu am găsit antetele; încearcă CSV sau verifică prima foaie.";
 });
 
 clearBtn.addEventListener("click", () => {
@@ -55,11 +55,58 @@ exportPdfBtn.addEventListener("click", () => {
   exportPdf();
 });
 
-// --- tolerant header detection ---
 const norm = (s="") => s.normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().replace(/\s+/g," ").trim();
 
-function extractTable(grid) {
-  // find a header row that contains something like 'vehic'
+// 1) Explicit mapping for SAMPLE (header on row with 'Vehicul' and these exact labels)
+function extractTableExplicit(grid) {
+  let headerRow = -1;
+  for (let i = 0; i < Math.min(grid.length, 200); i++) {
+    const row = (grid[i] || []);
+    if (row.some(v => String(v).trim() === "Vehicul")) { headerRow = i; break; }
+  }
+  if (headerRow === -1) return null;
+  const row = grid[headerRow];
+  // Build a map colName -> index based on exact labels seen in your sheet
+  const idx = {};
+  for (let c=0; c<row.length; c++) {
+    const v = String(row[c] || "").trim();
+    if (v === "Vehicul") idx.vehicul = c;
+    else if (v === "Timp în mişcare") idx.timpMiscare = c;
+    else if (v === "Distanta GPS") idx.distGps = c;
+    else if (v === "Kilometraj Oprire CAN") idx.kmCan = c;
+    else if (v === "Timp stationare") idx.timpStationare = c;
+    else if (v === "Staționări") idx.stationari = c;
+    else if (v === "Viteză Maximă (Km/h)") idx.vMax = c;
+    else if (v === "Viteza medie (Km/h)") idx.vMedie = c;
+    else if (v === "Consum total normat") idx.consum = c;
+    else if (v === "Timp funcţionare staţionară") idx.timpIdle = c;
+    else if (v === "Functionare motor") idx.funcMotor = c;
+  }
+  if (idx.vehicul == null || (idx.distGps == null && idx.kmCan == null)) return null;
+  const out = [];
+  for (let r = headerRow + 1; r < grid.length; r++) {
+    const g = grid[r] || [];
+    const veh = String(g[idx.vehicul] ?? "").trim();
+    if (!veh) break;
+    const vnorm = norm(veh);
+    if (vnorm.includes("total") || vnorm.includes("medie")) break;
+    const val = (i) => (i!=null && i>-1) ? g[i] : "";
+    out.push({
+      vehicle: veh,
+      distGps: val(idx.distGps),
+      kmCan: val(idx.kmCan),
+      timpMiscare: val(idx.timpMiscare),
+      timpIdle: val(idx.timpIdle),
+      funcMotor: val(idx.funcMotor),
+      vMedie: val(idx.vMedie),
+      stationari: val(idx.stationari),
+    });
+  }
+  return out;
+}
+
+// 2) Tolerant fallback (diacritics/contains)
+function extractTableTolerant(grid) {
   let headerRow = -1;
   for (let i = 0; i < Math.min(grid.length, 200); i++) {
     const row = (grid[i] || []).map(x => norm(String(x||"")));
@@ -83,21 +130,17 @@ function extractTable(grid) {
     timpIdle: findIdx(["timp functionare stationara","timp functionare stationala","timp funct","functionare stationar","functionare stational"]),
     funcMotor: findIdx(["functionare motor","functionare a motorului","functie motor","functionare mot"]),
     vMedie: findIdx(["viteza medie","viteza medie (km/h)"]),
-    stationari: findIdx(["stationari","stacionari","statonari","staționari","staționari","stari opriri"]),
+    stationari: findIdx(["stationari","stacionari","statonari","staționari","stari opriri"]),
   };
-  // required minimal: vehicul + at least one of gps/can km
-  if (idx.vehicul === -1 || (idx.distGps === -1 && idx.kmCan === -1)) {
-    return [];
-  }
+  if (idx.vehicul === -1 || (idx.distGps === -1 && idx.kmCan === -1)) return [];
   const out = [];
   for (let r = headerRow + 1; r < grid.length; r++) {
     const g = grid[r] || [];
-    const vehRaw = g[idx.vehicul];
-    const veh = (vehRaw==null?"":String(vehRaw)).trim();
-    if (!veh) break; // stop at first empty line after table
-    const vNorm = norm(veh);
-    if (vNorm.includes("total") || vNorm.includes("medie")) break;
-    const val = (i) => i>-1 ? g[i] : "";
+    const veh = String(g[idx.vehicul] ?? "").trim();
+    if (!veh) break;
+    const vnorm = norm(veh);
+    if (vnorm.includes("total") || vnorm.includes("medie")) break;
+    const val = (i) => (i>-1 ? g[i] : "");
     out.push({
       vehicle: veh,
       distGps: val(idx.distGps),
@@ -189,7 +232,7 @@ function exportPdf() {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const date = new Date().toLocaleString();
   doc.setFontSize(14);
-  doc.text("Analiză rapoarte GPS camioane – V3.2", 40, 40);
+  doc.text("Analiză rapoarte GPS camioane – V3.3", 40, 40);
   doc.setFontSize(10);
   doc.text(`Generat: ${date}`, 40, 58);
   const headers = Array.from(document.querySelectorAll("thead th")).map(th => th.textContent.trim());
@@ -197,5 +240,5 @@ function exportPdf() {
     Array.from(tr.children).slice(0, 6).map(td => td.textContent.trim())
   );
   doc.autoTable({ startY: 80, head: [headers.slice(0,6)], body, styles:{fontSize:8}, headStyles:{fillColor:[79,70,229]} });
-  doc.save(`raport_camioane_v3_2_${Date.now()}.pdf`);
+  doc.save(`raport_camioane_v3_3_${Date.now()}.pdf`);
 }
